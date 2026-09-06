@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>GraminSaathi Prototype</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+<style>
+  html,body{margin:0;padding:0;background:#EFEAD9;}
+  @keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" data-presets="react">
+const { useState } = React;
+
+const COLORS = {
+  indigo: "#2B4570", indigoDark: "#1D2F4F", turmeric: "#D9A404",
+  terracotta: "#B5502D", paper: "#EFEAD9", paperDark: "#E3DCC6",
+  ink: "#2A2622", inkSoft: "#6B655A", sage: "#5E7F5E", card: "#FBF9F2",
+};
+
+const BUSINESS_TYPES = [
+  { id: "kirana", label: "Kirana / Grocery" },
+  { id: "handicraft", label: "Handicraft / Artisan" },
+  { id: "food", label: "Food Stall / Vendor" },
+  { id: "tailoring", label: "Tailoring" },
+  { id: "other", label: "Other" },
+];
+
+const INSIGHTS = {
+  kirana: {
+    marketTip: "Demand for packaged staples rises sharply in your area during the last week of the month — stock up ahead of that window.",
+    financeTip: "Your category typically runs on thin margins; a small working-capital loan can smooth out monthly stock purchases.",
+    schemes: [ { name: "PM MUDRA Yojana", match: 92 }, { name: "PMEGP", match: 71 }, { name: "Stand-Up India", match: 54 } ],
+  },
+  handicraft: {
+    marketTip: "Handicraft sales in nearby blocks spike around festival season — plan production 6-8 weeks in advance.",
+    financeTip: "Artisan-focused schemes often waive collateral requirements — worth checking before a private loan.",
+    schemes: [ { name: "PMEGP", match: 89 }, { name: "PM MUDRA Yojana", match: 68 }, { name: "Stand-Up India", match: 60 } ],
+  },
+  food: {
+    marketTip: "Foot traffic near your area peaks on weekends and local haat days — evening hours show the biggest gap right now.",
+    financeTip: "A short working-capital cycle fits your business better than a long-term loan — look at smaller ticket sizes first.",
+    schemes: [ { name: "PM MUDRA Yojana", match: 85 }, { name: "Stand-Up India", match: 66 }, { name: "PMEGP", match: 50 } ],
+  },
+  tailoring: {
+    marketTip: "Uniform and festive-wear orders cluster around school reopening and festival months in your district.",
+    financeTip: "Equipment upgrade loans (machines) are commonly under-claimed in your category — often an easy match.",
+    schemes: [ { name: "PMEGP", match: 80 }, { name: "PM MUDRA Yojana", match: 74 }, { name: "Stand-Up India", match: 48 } ],
+  },
+  other: {
+    marketTip: "Local demand data suggests steady, moderate footfall in your area with room to grow with better visibility.",
+    financeTip: "Start with a small working-capital assessment before applying — it strengthens your scheme match.",
+    schemes: [ { name: "PM MUDRA Yojana", match: 75 }, { name: "PMEGP", match: 65 }, { name: "Stand-Up India", match: 55 } ],
+  },
+};
+
+const STEP_META = [
+  { key: "onboard", label: "Onboarding" },
+  { key: "match", label: "Local Data" },
+  { key: "ai", label: "AI Analysis" },
+  { key: "scheme", label: "Schemes" },
+  { key: "apply", label: "Apply" },
+  { key: "follow", label: "Follow-up" },
+  { key: "feedback", label: "Feedback" },
+];
+
+function Dots({ step }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "center", gap: 6, padding: "10px 0 4px" }}>
+      {STEP_META.map((s, i) => (
+        <div key={s.key} style={{
+          width: i === step ? 18 : 7, height: 7, borderRadius: 4,
+          background: i === step ? COLORS.terracotta : i < step ? COLORS.turmeric : COLORS.paperDark,
+          transition: "all .25s ease",
+        }} />
+      ))}
+    </div>
+  );
+}
+
+function Chip({ active, children, onClick }) {
+  return (
+    <button onClick={onClick} style={{
+      padding: "10px 14px", borderRadius: 10,
+      border: `1.5px solid ${active ? COLORS.indigo : COLORS.paperDark}`,
+      background: active ? COLORS.indigo : COLORS.card,
+      color: active ? "#fff" : COLORS.ink, fontSize: 14, fontWeight: 500,
+      cursor: "pointer", textAlign: "left", width: "100%",
+    }}>{children}</button>
+  );
+}
+
+function Star({ filled, onClick }) {
+  return (
+    <svg onClick={onClick} width="26" height="26" viewBox="0 0 24 24" style={{cursor:"pointer"}}
+      fill={filled ? COLORS.turmeric : "none"} stroke={filled ? COLORS.turmeric : COLORS.paperDark} strokeWidth="1.5">
+      <polygon points="12 2 15 9 22 9.5 17 14.5 18.5 22 12 18 5.5 22 7 14.5 2 9.5 9 9" />
+    </svg>
+  );
+}
+
+function App() {
+  const [step, setStep] = useState(0);
+  const [form, setForm] = useState({ name: "", businessType: "", village: "" });
+  const [matching, setMatching] = useState(false);
+  const [matched, setMatched] = useState(false);
+  const [selectedScheme, setSelectedScheme] = useState(null);
+  const [applied, setApplied] = useState(false);
+  const [rating, setRating] = useState(0);
+  const [feedbackSent, setFeedbackSent] = useState(false);
+
+  const insight = INSIGHTS[form.businessType] || INSIGHTS.other;
+  const businessLabel = (BUSINESS_TYPES.find((b) => b.id === form.businessType)?.label || "your business").toLowerCase();
+
+  const goNext = () => setStep((s) => Math.min(s + 1, STEP_META.length - 1));
+  const goBack = () => setStep((s) => Math.max(s - 1, 0));
+
+  const runMatching = () => {
+    setMatching(true); setMatched(false);
+    setTimeout(() => { setMatching(false); setMatched(true); }, 1100);
+  };
+
+  const restart = () => {
+    setStep(0); setForm({ name: "", businessType: "", village: "" });
+    setMatching(false); setMatched(false); setSelectedScheme(null);
+    setApplied(false); setRating(0); setFeedbackSent(false);
+  };
+
+  const canProceed = () => {
+    if (step === 0) return form.name.trim() && form.businessType && form.village.trim();
+    if (step === 1) return matched;
+    if (step === 3) return !!selectedScheme;
+    if (step === 4) return applied;
+    return true;
+  };
+
+  return (
+    <div style={{
+      minHeight: "100vh", background: `radial-gradient(1200px 600px at 50% -10%, ${COLORS.paperDark}, ${COLORS.paper})`,
+      display: "flex", alignItems: "center", justifyContent: "center", padding: "32px 16px",
+      fontFamily: "'Segoe UI', ui-sans-serif, system-ui, -apple-system, sans-serif",
+    }}>
+      <div style={{
+        width: 380, maxWidth: "100%", background: "#fff", borderRadius: 30,
+        border: `8px solid ${COLORS.indigoDark}`, boxShadow: "0 20px 50px rgba(29,47,79,0.25)", overflow: "hidden",
+      }}>
+        <div style={{ background: COLORS.indigo, padding: "18px 20px 14px", color: "#fff" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{
+              width: 34, height: 34, borderRadius: 9, background: COLORS.turmeric,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontWeight: 700, color: COLORS.indigoDark, fontSize: 16,
+            }}>G</div>
+            <div>
+              <div style={{ fontWeight: 600, fontSize: 16 }}>GraminSaathi</div>
+              <div style={{ fontSize: 11.5, color: "#D7DEEA" }}>Business & finance guide, in your language</div>
+            </div>
+          </div>
+          <Dots step={step} />
+        </div>
+
+        <div style={{ minHeight: 430, padding: "22px 20px 10px", color: COLORS.ink }}>
+          {step === 0 && (
+            <div>
+              <h3 style={{ margin: "0 0 4px", fontSize: 19, fontWeight: 600 }}>Namaste! Let's set you up</h3>
+              <p style={{ margin: "0 0 18px", fontSize: 13.5, color: COLORS.inkSoft }}>Tell us a little about your business.</p>
+
+              <label style={{ fontSize: 12.5, fontWeight: 600, color: COLORS.inkSoft }}>Your name</label>
+              <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
+                placeholder="e.g. Sunita Devi"
+                style={{ width: "100%", padding: "11px 12px", marginTop: 6, marginBottom: 16, borderRadius: 10, border: `1.5px solid ${COLORS.paperDark}`, fontSize: 14, boxSizing: "border-box" }} />
+
+              <label style={{ fontSize: 12.5, fontWeight: 600, color: COLORS.inkSoft }}>Business type</label>
+              <div style={{ display: "grid", gap: 8, marginTop: 6, marginBottom: 16 }}>
+                {BUSINESS_TYPES.map((b) => (
+                  <Chip key={b.id} active={form.businessType === b.id} onClick={() => setForm({ ...form, businessType: b.id })}>{b.label}</Chip>
+                ))}
+              </div>
+
+              <label style={{ fontSize: 12.5, fontWeight: 600, color: COLORS.inkSoft }}>Village / block</label>
+              <input value={form.village} onChange={(e) => setForm({ ...form, village: e.target.value })}
+                placeholder="e.g. Rampur block, Guna"
+                style={{ width: "100%", padding: "11px 12px", marginTop: 6, borderRadius: 10, border: `1.5px solid ${COLORS.paperDark}`, fontSize: 14, boxSizing: "border-box" }} />
+            </div>
+          )}
+
+          {step === 1 && (
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: 380, textAlign: "center" }}>
+              {!matching && !matched && (
+                <>
+                  <div style={{fontSize:40}}>📍</div>
+                  <h3 style={{ margin: "14px 0 6px", fontSize: 17 }}>Match to local data</h3>
+                  <p style={{ fontSize: 13.5, color: COLORS.inkSoft, margin: "0 0 20px" }}>We'll look at market and scheme data for <b>{form.village || "your area"}</b>.</p>
+                  <button onClick={runMatching} style={{ padding: "11px 22px", borderRadius: 10, border: "none", background: COLORS.terracotta, color: "#fff", fontWeight: 600, fontSize: 14, cursor: "pointer" }}>Check my area</button>
+                </>
+              )}
+              {matching && (
+                <>
+                  <div style={{width:34,height:34,border:`4px solid ${COLORS.paperDark}`,borderTopColor:COLORS.indigo,borderRadius:"50%",animation:"spin 1s linear infinite"}}></div>
+                  <p style={{ marginTop: 14, fontSize: 13.5, color: COLORS.inkSoft }}>Reading local market signals…</p>
+                </>
+              )}
+              {matched && (
+                <>
+                  <div style={{fontSize:36}}>✅</div>
+                  <h3 style={{ margin: "12px 0 8px", fontSize: 16 }}>Match found</h3>
+                  <div style={{ background: COLORS.card, border: `1px solid ${COLORS.paperDark}`, borderRadius: 12, padding: 14, fontSize: 13.5, textAlign: "left" }}>{insight.marketTip}</div>
+                </>
+              )}
+            </div>
+          )}
+
+          {step === 2 && (
+            <div>
+              <h3 style={{ margin: "0 0 4px", fontSize: 18 }}>Your AI advisory</h3>
+              <p style={{ margin: "0 0 16px", fontSize: 13, color: COLORS.inkSoft }}>Based on {businessLabel} in {form.village || "your area"}.</p>
+              <div style={{ background: COLORS.card, border: `1px solid ${COLORS.paperDark}`, borderRadius: 12, padding: 14, marginBottom: 12 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: COLORS.indigo, marginBottom: 6 }}>BUSINESS TIP</div>
+                <div style={{ fontSize: 13.5 }}>{insight.marketTip}</div>
+              </div>
+              <div style={{ background: COLORS.card, border: `1px solid ${COLORS.paperDark}`, borderRadius: 12, padding: 14 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: COLORS.terracotta, marginBottom: 6 }}>FINANCE TIP</div>
+                <div style={{ fontSize: 13.5 }}>{insight.financeTip}</div>
+              </div>
+            </div>
+          )}
+
+          {step === 3 && (
+            <div>
+              <h3 style={{ margin: "0 0 4px", fontSize: 18 }}>Matched schemes</h3>
+              <p style={{ margin: "0 0 16px", fontSize: 13, color: COLORS.inkSoft }}>Tap one to see the application.</p>
+              <div style={{ display: "grid", gap: 10 }}>
+                {insight.schemes.map((s) => (
+                  <button key={s.name} onClick={() => setSelectedScheme(s.name)} style={{
+                    textAlign: "left", padding: 14, borderRadius: 12, cursor: "pointer",
+                    border: `1.5px solid ${selectedScheme === s.name ? COLORS.indigo : COLORS.paperDark}`,
+                    background: selectedScheme === s.name ? "#EEF1F7" : COLORS.card,
+                  }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, fontWeight: 600 }}>
+                      <span>{s.name}</span><span style={{ color: COLORS.sage }}>{s.match}% match</span>
+                    </div>
+                    <div style={{ height: 6, background: COLORS.paperDark, borderRadius: 4, marginTop: 8, overflow: "hidden" }}>
+                      <div style={{ width: `${s.match}%`, height: "100%", background: COLORS.turmeric }} />
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {step === 4 && (
+            <div>
+              <h3 style={{ margin: "0 0 4px", fontSize: 18 }}>Application assist</h3>
+              <p style={{ margin: "0 0 16px", fontSize: 13, color: COLORS.inkSoft }}>Pre-filled for <b>{selectedScheme}</b> from your profile.</p>
+              <div style={{ background: COLORS.card, border: `1px solid ${COLORS.paperDark}`, borderRadius: 12, padding: 14, marginBottom: 14, fontSize: 13.5 }}>
+                <div style={{ marginBottom: 8 }}><b>Applicant:</b> {form.name || "—"}</div>
+                <div style={{ marginBottom: 8 }}><b>Business:</b> {businessLabel}</div>
+                <div><b>Location:</b> {form.village || "—"}</div>
+              </div>
+              <div style={{ fontSize: 12.5, fontWeight: 700, color: COLORS.inkSoft, marginBottom: 8 }}>DOCUMENTS NEEDED</div>
+              <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13.5, marginBottom: 16 }}>
+                <li>Aadhaar card</li><li>Business proof / photo</li><li>Bank passbook copy</li>
+              </ul>
+              {!applied ? (
+                <button onClick={() => setApplied(true)} style={{ width: "100%", padding: "11px 0", borderRadius: 10, border: "none", background: COLORS.indigo, color: "#fff", fontWeight: 600, fontSize: 14, cursor: "pointer" }}>Submit application</button>
+              ) : (
+                <div style={{ display: "flex", alignItems: "center", gap: 8, color: COLORS.sage, fontWeight: 600, fontSize: 13.5 }}>✅ Application submitted</div>
+              )}
+            </div>
+          )}
+
+          {step === 5 && (
+            <div>
+              <h3 style={{ margin: "0 0 4px", fontSize: 18 }}>Follow-up</h3>
+              <p style={{ margin: "0 0 16px", fontSize: 13, color: COLORS.inkSoft }}>Updates arrive via SMS / WhatsApp.</p>
+              <div style={{ display: "grid", gap: 10 }}>
+                {[
+                  { t: `Your ${selectedScheme || "scheme"} application is under review.`, s: "2 hours ago" },
+                  { t: "New MUDRA disbursement window opens next month.", s: "Yesterday" },
+                  { t: `Demand for ${businessLabel} is rising in your block this week.`, s: "3 days ago" },
+                ].map((n, i) => (
+                  <div key={i} style={{ background: COLORS.card, border: `1px solid ${COLORS.paperDark}`, borderRadius: 12, padding: 12 }}>
+                    <div style={{ fontSize: 13.5 }}>{n.t}</div>
+                    <div style={{ fontSize: 11.5, color: COLORS.inkSoft, marginTop: 4 }}>{n.s}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {step === 6 && (
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: 380, textAlign: "center" }}>
+              {!feedbackSent ? (
+                <>
+                  <div style={{fontSize:34}}>🔄</div>
+                  <h3 style={{ margin: "14px 0 6px", fontSize: 17 }}>How was this advice?</h3>
+                  <p style={{ fontSize: 13, color: COLORS.inkSoft, margin: "0 0 14px" }}>Your feedback improves future suggestions.</p>
+                  <div style={{ display: "flex", gap: 6, marginBottom: 18 }}>
+                    {[1,2,3,4,5].map((n) => (<Star key={n} filled={n <= rating} onClick={() => setRating(n)} />))}
+                  </div>
+                  <button disabled={!rating} onClick={() => setFeedbackSent(true)} style={{
+                    padding: "11px 22px", borderRadius: 10, border: "none",
+                    background: rating ? COLORS.indigo : COLORS.paperDark,
+                    color: rating ? "#fff" : COLORS.inkSoft, fontWeight: 600, fontSize: 14,
+                    cursor: rating ? "pointer" : "not-allowed",
+                  }}>Send feedback</button>
+                </>
+              ) : (
+                <>
+                  <div style={{fontSize:40}}>✅</div>
+                  <h3 style={{ margin: "14px 0 6px", fontSize: 17 }}>Shukriya, {form.name || "friend"}!</h3>
+                  <p style={{ fontSize: 13.5, color: COLORS.inkSoft, margin: "0 0 20px" }}>This closes the loop — your feedback feeds back into the AI analysis step.</p>
+                  <button onClick={restart} style={{ padding: "10px 18px", borderRadius: 10, border: `1.5px solid ${COLORS.indigo}`, background: "#fff", color: COLORS.indigo, fontWeight: 600, fontSize: 13.5, cursor: "pointer" }}>Restart demo</button>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
+        {step < 6 && (
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 20px 18px", borderTop: `1px solid ${COLORS.paperDark}` }}>
+            <button onClick={goBack} disabled={step === 0} style={{ background: "none", border: "none", color: step === 0 ? COLORS.paperDark : COLORS.inkSoft, fontSize: 13.5, cursor: step === 0 ? "default" : "pointer" }}>← Back</button>
+            <span style={{ fontSize: 11.5, color: COLORS.inkSoft }}>Step {step + 1} of {STEP_META.length} — {STEP_META[step].label}</span>
+            <button onClick={goNext} disabled={!canProceed()} style={{ background: "none", border: "none", color: canProceed() ? COLORS.indigo : COLORS.paperDark, fontSize: 13.5, fontWeight: 600, cursor: canProceed() ? "pointer" : "default" }}>Next →</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
